@@ -167,7 +167,7 @@ impl ContainerService for LocalContainerService {
     async fn stream_logs(
         &self,
         id: &Uuid,
-    ) -> Option<futures::stream::BoxStream<'static, Result<Event, std::io::Error>>> {
+    ) -> Option<futures_util::stream::BoxStream<'static, Result<Event, std::io::Error>>> {
         self.execution_tracker.history_plus_stream(id).await
     }
 }
