@@ -1,4 +1,4 @@
-use std::{fmt, path::PathBuf};
+use std::{fmt, path::PathBuf, str::FromStr};
 
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -21,6 +21,7 @@ pub struct EnvironmentInfo {
 pub enum ExecutorConfig {
     Echo,
     Claude,
+    /// TODO: Claude Plan should share configuration with Claude
     ClaudePlan,
     Amp,
     Gemini,
@@ -54,11 +55,87 @@ impl ExecutorConfig {
             ExecutorConfig::Codex => "codex",
         }
     }
+
+    pub fn config_path(&self) -> Option<PathBuf> {
+        match self {
+            ExecutorConfig::Echo => None,
+            ExecutorConfig::CharmOpencode => {
+                dirs::home_dir().map(|home| home.join(".opencode.json"))
+            }
+            ExecutorConfig::Claude => dirs::home_dir().map(|home| home.join(".claude.json")),
+            ExecutorConfig::ClaudePlan => dirs::home_dir().map(|home| home.join(".claude.json")),
+            ExecutorConfig::ClaudeCodeRouter => {
+                dirs::home_dir().map(|home| home.join(".claude.json"))
+            }
+            ExecutorConfig::Amp => {
+                dirs::config_dir().map(|config| config.join("amp").join("settings.json"))
+            }
+            ExecutorConfig::Gemini => {
+                dirs::home_dir().map(|home| home.join(".gemini").join("settings.json"))
+            }
+            ExecutorConfig::SstOpencode => {
+                #[cfg(unix)]
+                {
+                    xdg::BaseDirectories::with_prefix("opencode").get_config_file("opencode.json")
+                }
+                #[cfg(not(unix))]
+                {
+                    dirs::config_dir().map(|config| config.join("opencode").join("opencode.json"))
+                }
+            }
+            ExecutorConfig::Aider => None,
+            ExecutorConfig::Codex => {
+                dirs::home_dir().map(|home| home.join(".codex").join("config.toml"))
+            }
+            ExecutorConfig::SetupScript { .. } => None,
+        }
+    }
+
+    /// Get the JSON attribute path for MCP servers in the config file
+    /// Returns None if the executor doesn't support MCP
+    pub fn mcp_attribute_path(&self) -> Option<Vec<&'static str>> {
+        match self {
+            ExecutorConfig::Echo => None, // Echo doesn't support MCP
+            ExecutorConfig::CharmOpencode => Some(vec!["mcpServers"]),
+            ExecutorConfig::SstOpencode => Some(vec!["mcp"]),
+            ExecutorConfig::Claude => Some(vec!["mcpServers"]),
+            ExecutorConfig::ClaudePlan => None, // Claude Plan shares Claude config
+            ExecutorConfig::Amp => Some(vec!["amp", "mcpServers"]), // Nested path for Amp
+            ExecutorConfig::Gemini => Some(vec!["mcpServers"]),
+            ExecutorConfig::ClaudeCodeRouter => Some(vec!["mcpServers"]),
+            ExecutorConfig::Aider => None, // Aider doesn't support MCP. https://github.com/Aider-AI/aider/issues/3314
+            ExecutorConfig::Codex => None, // Codex uses TOML config, frontend doesn't handle TOML yet
+            ExecutorConfig::SetupScript { .. } => None, // Setup scripts don't support MCP
+        }
+    }
 }
 
 impl fmt::Display for ExecutorConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_type_str())
+    }
+}
+
+impl FromStr for ExecutorConfig {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "echo" => Ok(ExecutorConfig::Echo),
+            "claude" => Ok(ExecutorConfig::Claude),
+            "claude-plan" => Ok(ExecutorConfig::ClaudePlan),
+            "amp" => Ok(ExecutorConfig::Amp),
+            "gemini" => Ok(ExecutorConfig::Gemini),
+            "charm-opencode" => Ok(ExecutorConfig::CharmOpencode),
+            "claude-code-router" => Ok(ExecutorConfig::ClaudeCodeRouter),
+            "sst-opencode" => Ok(ExecutorConfig::SstOpencode),
+            "aider" => Ok(ExecutorConfig::Aider),
+            "codex" => Ok(ExecutorConfig::Codex),
+            "setup-script" => Ok(ExecutorConfig::SetupScript {
+                script: "setup script".to_string(),
+            }),
+            _ => Err(format!("Unknown executor type: {}", s)),
+        }
     }
 }
 
