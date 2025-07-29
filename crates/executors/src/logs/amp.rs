@@ -46,6 +46,7 @@ impl LogNormalizer for AmpLogNormalizer {
                     LogMsg::JsonPatch(_) => {
                         continue;
                     }
+                    LogMsg::Finished => break,
                 };
                 buf.push_str(&chunk);
 
